@@ -22,7 +22,6 @@
     const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
     // --- INLINE SVG COMPONENTS (Replacing lucide-react for standalone HTML compatibility) ---
-    // Added pointer-events-none so icons don't block touchmove detection
     const IconWrapper = ({ size = 24, className = '', children, ...props }) => (
       <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`pointer-events-none ${className}`} {...props}>
         {children}
@@ -41,7 +40,6 @@
 
     const COLS = 6;
     const ROWS = 6;
-    const TOTAL_TILES = COLS * ROWS;
 
     // --- VERIFIED SOLVABLE LEVEL DESIGN ---
     const LEVELS = [
@@ -287,6 +285,7 @@
         setLogs(prev => [...prev, { id: Date.now() + Math.random(), text, type }]);
       }, []);
 
+      // ✅ FIXED: resetLevel now replaces logs instead of appending
       const resetLevel = useCallback(() => {
         if (!isMountedRef.current) return;
         setGameState('idle');
@@ -296,8 +295,8 @@
         const initialState = { encrypted: false, key: null, auth: false };
         setPacketState(initialState);
         simPacketStateRef.current = initialState;
-        addLog(`> LOADED MODULE: ${level.title}`, 'info');
-      }, [level, addLog]);
+        setLogs([{ id: Date.now(), text: `> LOADED MODULE: ${level.title}`, type: 'info' }]);
+      }, [level]);
 
       useEffect(() => {
         resetLevel();
@@ -550,7 +549,6 @@
             `}
           </style>
           
-          {/* LEFT COLUMN: THE GRID AREA */}
           <div className="flex-1 flex flex-col items-center justify-center pt-4 md:pt-0">
             <div className="mb-4 sm:mb-6 text-center">
               <h1 className="text-2xl sm:text-3xl font-bold text-cyan-400 tracking-wider">ROUTING PROTOCOL</h1>
@@ -630,7 +628,6 @@
             </div>
           </div>
 
-          {/* RIGHT COLUMN: TERMINAL & CONTROLS */}
           <div className="flex-1 flex flex-col gap-4 max-w-md w-full mx-auto">
             <div className="bg-slate-900 border-l-4 border-cyan-500 p-3 sm:p-4 shadow-lg" role="region" aria-label="Level Objective">
               <h2 className="text-base sm:text-lg font-bold text-white uppercase">{level.title}</h2>
