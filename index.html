@@ -22,8 +22,9 @@
     const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
     // --- INLINE SVG COMPONENTS (Replacing lucide-react for standalone HTML compatibility) ---
+    // Added pointer-events-none so icons don't block touchmove detection
     const IconWrapper = ({ size = 24, className = '', children, ...props }) => (
-      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`pointer-events-none ${className}`} {...props}>
         {children}
       </svg>
     );
@@ -206,7 +207,6 @@
         isMountedRef.current = true;
         return () => {
           isMountedRef.current = false;
-          // Clear all active sound timeouts
           timeoutIdsRef.current.forEach(clearTimeout);
           timeoutIdsRef.current = [];
           if (audioCtxRef.current) {
@@ -215,14 +215,12 @@
         };
       }, []);
 
-      // Programmatic focus management when focusedIdx changes
       useEffect(() => {
         if (cellRefs.current[focusedIdx]) {
           cellRefs.current[focusedIdx].focus();
         }
       }, [focusedIdx]);
 
-      // Auto-scroll terminal logs
       useEffect(() => {
         if (logEndRef.current) {
           logEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -350,6 +348,22 @@
           setFocusedIdx(index);
         }
       }, [gameState, path, level, SFX]);
+
+      // Mobile touch-drag handling
+      const handleTouchMove = useCallback((e) => {
+        if (gameState !== 'drawing') return;
+        const touch = e.touches[0];
+        const element = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (element) {
+          const cell = element.closest('[data-index]');
+          if (cell) {
+            const indexStr = cell.getAttribute('data-index');
+            if (indexStr !== null) {
+              handlePointerEnter(parseInt(indexStr, 10));
+            }
+          }
+        }
+      }, [gameState, handlePointerEnter]);
 
       const handlePointerUp = useCallback(() => {
         if (gameState === 'drawing') {
@@ -518,7 +532,7 @@
 
       return (
         <div 
-          className="min-h-screen bg-slate-800 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-700 via-slate-800 to-slate-900 text-slate-300 font-mono flex flex-col md:flex-row p-4 gap-6 outline-none transition-all"
+          className="min-h-screen bg-slate-800 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-700 via-slate-800 to-slate-900 text-slate-300 font-mono flex flex-col md:flex-row p-2 sm:p-4 gap-4 sm:gap-6 outline-none transition-all overflow-x-hidden"
           role="application"
           aria-label="Hacker Grid Game"
         >
@@ -537,19 +551,20 @@
           </style>
           
           {/* LEFT COLUMN: THE GRID AREA */}
-          <div className="flex-1 flex flex-col items-center justify-center">
-            <div className="mb-6 text-center">
-              <h1 className="text-3xl font-bold text-cyan-400 tracking-wider">ROUTING PROTOCOL</h1>
-              <p className="text-slate-300 text-sm mt-1">SECURE NETWORK SIMULATOR v2.5</p>
+          <div className="flex-1 flex flex-col items-center justify-center pt-4 md:pt-0">
+            <div className="mb-4 sm:mb-6 text-center">
+              <h1 className="text-2xl sm:text-3xl font-bold text-cyan-400 tracking-wider">ROUTING PROTOCOL</h1>
+              <p className="text-slate-300 text-xs sm:text-sm mt-1">SECURE NETWORK SIMULATOR v2.5</p>
             </div>
 
             <div 
               role="grid"
               aria-label="Network Routing Grid"
-              className="bg-slate-900 p-2 rounded-xl border border-slate-800 shadow-2xl relative select-none touch-none flex flex-col gap-1"
+              className="bg-slate-900 p-1.5 sm:p-2 rounded-xl border border-slate-800 shadow-2xl relative select-none touch-none flex flex-col gap-1"
               onKeyDown={handleKeyDown}
               onPointerUp={handlePointerUp}
               onPointerLeave={handlePointerUp}
+              onTouchMove={handleTouchMove}
             >
               {Array.from({ length: ROWS }).map((_, r) => (
                 <div key={r} role="row" className="flex gap-1">
@@ -577,6 +592,7 @@
                     return (
                       <div
                         key={idx}
+                        data-index={idx}
                         ref={el => cellRefs.current[idx] = el}
                         role="gridcell"
                         aria-selected={isPath}
@@ -585,22 +601,21 @@
                         onFocus={() => setFocusedIdx(idx)}
                         onPointerDown={(e) => { e.preventDefault(); handlePointerDown(idx); }}
                         onPointerEnter={(e) => { e.preventDefault(); handlePointerEnter(idx); }}
-                        onPointerUp={handlePointerUp}
-                        className={`w-12 h-12 md:w-16 md:h-16 rounded flex items-center justify-center transition-all relative ${isWall || isHacker ? 'cursor-not-allowed' : 'cursor-crosshair'} border border-slate-800/50 grid-cell-focus ${bgClass}`}
+                        className={`w-10 h-10 sm:w-12 sm:h-12 md:w-14 lg:w-16 md:h-14 lg:h-16 rounded flex items-center justify-center transition-all relative ${isWall || isHacker ? 'cursor-not-allowed' : 'cursor-crosshair'} border border-slate-800/50 grid-cell-focus ${bgClass}`}
                       >
-                        {isClient && <Laptop size={24} className="text-cyan-400 z-10" aria-hidden="true" />}
-                        {isServer && <Server size={24} className={`z-10 ${gameState === 'success' ? "text-green-400" : "text-slate-400"}`} aria-hidden="true" />}
-                        {isHacker && <Eye size={24} className="text-red-500 animate-pulse z-10" aria-hidden="true" />}
-                        {node && <node.icon size={20} className={`${node.color} z-10`} aria-hidden="true" />}
+                        {isClient && <Laptop size={20} className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 text-cyan-400 z-10" aria-hidden="true" />}
+                        {isServer && <Server size={20} className={`w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 z-10 ${gameState === 'success' ? "text-green-400" : "text-slate-400"}`} aria-hidden="true" />}
+                        {isHacker && <Eye size={20} className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 text-red-500 animate-pulse z-10" aria-hidden="true" />}
+                        {node && <node.icon size={20} className={`w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 ${node.color} z-10`} aria-hidden="true" />}
                         
                         {(node || isClient || isServer) && (
-                          <span className="absolute -bottom-5 text-[10px] whitespace-nowrap text-slate-500 font-bold opacity-0 md:opacity-100">
+                          <span className="absolute -bottom-4 sm:-bottom-5 text-[9px] sm:text-[10px] whitespace-nowrap text-slate-500 font-bold opacity-0 md:opacity-100">
                             {isClient ? 'CLIENT' : isServer ? 'SERVER' : node.label}
                           </span>
                         )}
 
                         {isPath && !isHead && gameState !== 'running' && (
-                          <div className="absolute inset-0 m-auto w-2 h-2 bg-cyan-500 rounded-full" />
+                          <div className="absolute inset-0 m-auto w-1.5 h-1.5 sm:w-2 sm:h-2 bg-cyan-500 rounded-full" />
                         )}
                       </div>
                     );
@@ -609,40 +624,40 @@
               ))}
             </div>
 
-            <div className="flex gap-4 mt-8 text-xs text-slate-300 font-medium">
-              <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-950 border border-red-500/30 rounded"></div> Sniff Zone</div>
-              <div className="flex items-center gap-1"><div className="w-3 h-3 bg-slate-800 rounded"></div> Firewall (Wall)</div>
+            <div className="flex gap-3 sm:gap-4 mt-6 sm:mt-8 text-[10px] sm:text-xs text-slate-300 font-medium pb-4 md:pb-0">
+              <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-red-950 border border-red-500/30 rounded"></div> Sniff Zone</div>
+              <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-slate-800 rounded"></div> Firewall (Wall)</div>
             </div>
           </div>
 
           {/* RIGHT COLUMN: TERMINAL & CONTROLS */}
           <div className="flex-1 flex flex-col gap-4 max-w-md w-full mx-auto">
-            <div className="bg-slate-900 border-l-4 border-cyan-500 p-4 shadow-lg" role="region" aria-label="Level Objective">
-              <h2 className="text-lg font-bold text-white uppercase">{level.title}</h2>
-              <p className="text-sm text-slate-400 mt-2 leading-relaxed">{level.objective}</p>
+            <div className="bg-slate-900 border-l-4 border-cyan-500 p-3 sm:p-4 shadow-lg" role="region" aria-label="Level Objective">
+              <h2 className="text-base sm:text-lg font-bold text-white uppercase">{level.title}</h2>
+              <p className="text-xs sm:text-sm text-slate-400 mt-1.5 sm:mt-2 leading-relaxed">{level.objective}</p>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 p-4 shadow-lg relative overflow-hidden">
+            <div className="bg-slate-900 border border-slate-800 p-3 sm:p-4 shadow-lg relative overflow-hidden">
               <div className="absolute top-0 right-0 p-2 opacity-10">
-                <Terminal size={64} />
+                <Terminal size={48} className="sm:w-16 sm:h-16" />
               </div>
-              <h3 className="text-xs font-bold text-slate-500 mb-3 tracking-widest border-b border-slate-800 pb-2">PACKET INSPECTOR</h3>
-              <div className="grid grid-cols-2 gap-4 text-sm relative z-10" aria-live="polite">
-                <div className="flex flex-col gap-1">
-                  <span className="text-slate-500">ENCRYPTION</span>
+              <h3 className="text-[10px] sm:text-xs font-bold text-slate-500 mb-2 sm:mb-3 tracking-widest border-b border-slate-800 pb-1.5 sm:pb-2">PACKET INSPECTOR</h3>
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm relative z-10" aria-live="polite">
+                <div className="flex flex-col gap-0.5 sm:gap-1">
+                  <span className="text-slate-500 text-[10px] sm:text-xs">ENCRYPTION</span>
                   <span className={packetState.encrypted ? "text-green-400 font-bold" : "text-red-400 font-bold"}>
                     {packetState.encrypted ? "ACTIVE" : "PLAINTEXT"}
                   </span>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-slate-500">KEY TRUST</span>
+                <div className="flex flex-col gap-0.5 sm:gap-1">
+                  <span className="text-slate-500 text-[10px] sm:text-xs">KEY TRUST</span>
                   <span className={!packetState.key ? "text-slate-600" : packetState.key === 'good' ? "text-blue-400 font-bold" : "text-red-500 font-bold"}>
                     {packetState.key ? packetState.key.toUpperCase() : "NONE"}
                   </span>
                 </div>
-                <div className="flex flex-col gap-1 col-span-2">
-                  <span className="text-slate-500">AUTH TOKEN (mTLS)</span>
-                  <span className={packetState.auth ? "text-purple-400 font-bold flex items-center gap-2" : "text-slate-600 font-bold"}>
+                <div className="flex flex-col gap-0.5 sm:gap-1 col-span-2">
+                  <span className="text-slate-500 text-[10px] sm:text-xs">AUTH TOKEN (mTLS)</span>
+                  <span className={packetState.auth ? "text-purple-400 font-bold flex items-center gap-1.5 sm:gap-2" : "text-slate-600 font-bold"}>
                     {packetState.auth ? <><Shield size={14}/> VERIFIED</> : "MISSING"}
                   </span>
                 </div>
@@ -650,15 +665,15 @@
             </div>
 
             <div 
-              className="flex-1 min-h-[200px] bg-black border border-slate-800 p-4 font-mono text-xs overflow-y-auto flex flex-col justify-end shadow-inner relative"
+              className="flex-1 min-h-[150px] sm:min-h-[200px] bg-black border border-slate-800 p-3 sm:p-4 font-mono text-[10px] sm:text-xs overflow-y-auto flex flex-col justify-end shadow-inner relative"
               aria-live="polite"
             >
-              <div className="absolute top-2 left-2 flex gap-1.5" aria-hidden="true">
-                <div className="w-2.5 h-2.5 rounded-full bg-slate-700"></div>
-                <div className="w-2.5 h-2.5 rounded-full bg-slate-700"></div>
-                <div className="w-2.5 h-2.5 rounded-full bg-slate-700"></div>
+              <div className="absolute top-2 left-2 flex gap-1 sm:gap-1.5" aria-hidden="true">
+                <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-slate-700"></div>
+                <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-slate-700"></div>
+                <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-slate-700"></div>
               </div>
-              <div className="mt-6 flex flex-col gap-1">
+              <div className="mt-5 sm:mt-6 flex flex-col gap-0.5 sm:gap-1">
                 {logs.map((log) => (
                   <div key={log.id} style={{ animation: 'fadeIn 0.2s ease-in-out' }} className={`
                     ${log.type === 'error' ? 'text-red-500 font-bold' : ''}
@@ -673,29 +688,29 @@
               </div>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex gap-2 sm:gap-3">
               {gameState === 'success' ? (
                 <button
                   onClick={() => setLevelIdx(prev => (prev + 1) % LEVELS.length)}
-                  className="flex-1 flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-4 rounded transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500"
+                  className="flex-1 flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 sm:py-4 text-xs sm:text-sm rounded transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500"
                 >
-                  <CheckCircle2 size={20} /> NEXT MODULE
+                  <CheckCircle2 size={18} className="sm:w-5 sm:h-5" /> NEXT MODULE
                 </button>
               ) : (
                 <>
                   <button
                     onClick={resetLevel}
                     aria-label="Reset Level"
-                    className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-4 px-6 rounded transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-slate-500"
+                    className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 sm:py-4 px-4 sm:px-6 rounded transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-slate-500"
                   >
-                    <RotateCcw size={20} />
+                    <RotateCcw size={18} className="sm:w-5 sm:h-5" />
                   </button>
                   <button
                     onClick={executeRun}
                     disabled={gameState !== 'ready'}
-                    className="flex-1 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded transition-all disabled:opacity-30 disabled:cursor-not-allowed focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                    className="flex-1 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-white font-bold py-3 sm:py-4 text-xs sm:text-sm rounded transition-all disabled:opacity-30 disabled:cursor-not-allowed focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                   >
-                    <Play size={20} /> EXECUTE ROUTE
+                    <Play size={18} className="sm:w-5 sm:h-5" /> EXECUTE ROUTE
                   </button>
                 </>
               )}
