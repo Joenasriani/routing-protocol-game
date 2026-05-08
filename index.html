@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HackerGrid: Routing Protocol</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React & ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  
+  <!-- Babel for in-browser JSX transpilation -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-300">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+    // --- INLINE SVG COMPONENTS (Replacing lucide-react for standalone HTML compatibility) ---
+    const IconWrapper = ({ size = 24, className = '', children, ...props }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+        {children}
+      </svg>
+    );
+    const Terminal = (p) => <IconWrapper {...p}><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></IconWrapper>;
+    const Laptop = (p) => <IconWrapper {...p}><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="2" y1="20" x2="22" y2="20"></line></IconWrapper>;
+    const Server = (p) => <IconWrapper {...p}><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></IconWrapper>;
+    const Eye = (p) => <IconWrapper {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></IconWrapper>;
+    const Shield = (p) => <IconWrapper {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></IconWrapper>;
+    const Key = (p) => <IconWrapper {...p}><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></IconWrapper>;
+    const Play = (p) => <IconWrapper {...p}><polygon points="5 3 19 12 5 21 5 3"></polygon></IconWrapper>;
+    const RotateCcw = (p) => <IconWrapper {...p}><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></IconWrapper>;
+    const CheckCircle2 = (p) => <IconWrapper {...p}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></IconWrapper>;
+    const Lock = (p) => <IconWrapper {...p}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></IconWrapper>;
+
+    const COLS = 6;
+    const ROWS = 6;
+    const TOTAL_TILES = COLS * ROWS;
+
+    // --- VERIFIED SOLVABLE LEVEL DESIGN ---
+    const LEVELS = [
+      {
+        id: 1,
+        title: "1. The Packet Sniffer",
+        objective: "Route to the Server. A Hacker is sniffing the middle of the network. Route through the Encryptor first to protect your data.",
+        client: 18, 
+        server: 23, 
+        hackers: [21], 
+        nodes: [
+          { index: 3, type: 'encrypt_good', icon: Lock, color: 'text-green-400', label: "AES-256" }
+        ],
+        walls: [14, 20, 26], 
+      },
+      {
+        id: 2,
+        title: "2. The Honeypot Key",
+        objective: "The Hacker deployed a fake Key (Red). Find the verified Server Key (Blue), then cross the hacker's sniff zone to reach the Server.",
+        client: 30, 
+        server: 5,  
+        hackers: [14], 
+        nodes: [
+          { index: 25, type: 'encrypt_bad', icon: Key, color: 'text-red-500', label: "Fake Key" },
+          { index: 32, type: 'encrypt_good', icon: Key, color: 'text-blue-400', label: "Server Key" }
+        ],
+        walls: [0, 6, 12, 18, 24, 10, 16, 22, 28, 34], 
+      },
+      {
+        id: 3,
+        title: "3. Zero-Trust Architecture",
+        objective: "Encrypt your payload first to cross the sniff zones securely, then grab the Auth Token (mTLS) to unlock the Server firewall.",
+        client: 0,  
+        server: 35, 
+        hackers: [14, 21], 
+        nodes: [
+          { index: 5, type: 'auth', icon: Shield, color: 'text-purple-400', label: "mTLS Auth" },
+          { index: 24, type: 'encrypt_good', icon: Lock, color: 'text-green-400', label: "AES-256" }
+        ],
+        walls: [1, 7, 13, 19], 
+        requiresAuth: true
+      },
+      {
+        id: 4,
+        title: "4. The Bottleneck",
+        objective: "A massive sniff zone blocks the server. Retrieve the encryption key before attempting to cross the perimeter.",
+        client: 12, 
+        server: 17, 
+        hackers: [9, 21, 33], 
+        nodes: [
+          { index: 0, type: 'encrypt_good', icon: Lock, color: 'text-green-400', label: "AES-256" }
+        ],
+        walls: [13, 19], 
+      },
+      {
+        id: 5,
+        title: "5. The Imposter Syndrome",
+        objective: "Multiple honeypots detected. Avoid the fake keys (Red) after obtaining the valid AES-256 key (Blue).",
+        client: 24, 
+        server: 5, 
+        hackers: [14], 
+        nodes: [
+          { index: 30, type: 'encrypt_good', icon: Key, color: 'text-blue-400', label: "Server Key" }, 
+          { index: 12, type: 'encrypt_bad', icon: Key, color: 'text-red-500', label: "Fake Key" }, 
+          { index: 28, type: 'encrypt_bad', icon: Key, color: 'text-red-500', label: "Fake Key" }
+        ],
+        walls: [25, 19, 13, 7], 
+      },
+      {
+        id: 6,
+        title: "6. The Gauntlet",
+        objective: "Two hackers cover opposite corners. Navigate the safe zone to find the valid key before crossing enemy lines.",
+        client: 0, 
+        server: 35, 
+        hackers: [10, 25], 
+        nodes: [
+          { index: 14, type: 'encrypt_good', icon: Lock, color: 'text-green-400', label: "AES-256" }, 
+          { index: 2, type: 'encrypt_bad', icon: Key, color: 'text-red-500', label: "Fake Key" }
+        ],
+        walls: [1, 13, 27, 21], 
+      },
+      {
+        id: 7,
+        title: "7. The Perimeter",
+        objective: "Zero-Trust active. You need BOTH the AES-256 Key and the mTLS Auth Token to bypass the firewall and reach the Server.",
+        client: 30, 
+        server: 5, 
+        hackers: [20, 21], 
+        nodes: [
+          { index: 31, type: 'encrypt_good', icon: Lock, color: 'text-green-400', label: "AES-256" }, 
+          { index: 0, type: 'auth', icon: Shield, color: 'text-purple-400', label: "mTLS Auth" }, 
+          { index: 24, type: 'encrypt_bad', icon: Key, color: 'text-red-500', label: "Fake Key" }
+        ],
+        walls: [26, 27, 11, 17], 
+        requiresAuth: true
+      },
+      {
+        id: 8,
+        title: "8. The Outer Ring",
+        objective: "The center is heavily monitored. Gather your encryption key and auth token from the perimeter before diving through the core.",
+        client: 0, 
+        server: 35, 
+        hackers: [14, 15, 20, 21], 
+        nodes: [
+          { index: 1, type: 'encrypt_good', icon: Lock, color: 'text-green-400', label: "AES-256" }, 
+          { index: 29, type: 'auth', icon: Shield, color: 'text-purple-400', label: "mTLS Auth" }
+        ],
+        walls: [4, 11, 24, 31], 
+        requiresAuth: true
+      },
+      {
+        id: 9,
+        title: "9. The Decoy Route",
+        objective: "Safe paths are blocked. Authenticate, encrypt, and deliberately walk through the sniff zone to reach the server.",
+        client: 32, 
+        server: 2, 
+        hackers: [8, 14, 20], 
+        nodes: [
+          { index: 35, type: 'auth', icon: Shield, color: 'text-purple-400', label: "mTLS Auth" }, 
+          { index: 30, type: 'encrypt_good', icon: Lock, color: 'text-green-400', label: "AES-256" }, 
+          { index: 16, type: 'encrypt_bad', icon: Key, color: 'text-red-500', label: "Fake Key" }
+        ],
+        walls: [12, 11, 27, 28], 
+        requiresAuth: true
+      },
+      {
+        id: 10,
+        title: "10. Master Architect",
+        objective: "The ultimate Zero-Trust test. Navigate the maze, override any fake keys with the AES-256 key, secure the Auth Token, and reach the server.",
+        client: 0, 
+        server: 35, 
+        hackers: [14, 21], 
+        nodes: [
+          { index: 30, type: 'encrypt_good', icon: Lock, color: 'text-green-400', label: "AES-256" }, 
+          { index: 5, type: 'auth', icon: Shield, color: 'text-purple-400', label: "mTLS Auth" }, 
+          { index: 25, type: 'encrypt_bad', icon: Key, color: 'text-red-500', label: "Fake Key" }, 
+          { index: 3, type: 'encrypt_bad', icon: Key, color: 'text-red-500', label: "Fake Key" }
+        ],
+        walls: [1, 13, 11, 23], 
+        requiresAuth: true
+      }
+    ];
+
+    function App() {
+      const [levelIdx, setLevelIdx] = useState(0);
+      const level = LEVELS[levelIdx];
+
+      const [gameState, setGameState] = useState('idle');
+      const [path, setPath] = useState([]);
+      const [packetIdx, setPacketIdx] = useState(-1);
+      const [packetState, setPacketState] = useState({ encrypted: false, key: null, auth: false });
+      const [logs, setLogs] = useState([{ id: 0, text: "> SYSTEM INITIALIZED.", type: 'info' }]);
+      const [focusedIdx, setFocusedIdx] = useState(LEVELS[0].client);
+      
+      const audioCtxRef = useRef(null);
+      const timeoutIdsRef = useRef([]);
+      const simPacketStateRef = useRef({ encrypted: false, key: null, auth: false });
+      const isMountedRef = useRef(true);
+      const cellRefs = useRef([]);
+      const logEndRef = useRef(null);
+
+      useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+          isMountedRef.current = false;
+          // Clear all active sound timeouts
+          timeoutIdsRef.current.forEach(clearTimeout);
+          timeoutIdsRef.current = [];
+          if (audioCtxRef.current) {
+            audioCtxRef.current.close();
+          }
+        };
+      }, []);
+
+      // Programmatic focus management when focusedIdx changes
+      useEffect(() => {
+        if (cellRefs.current[focusedIdx]) {
+          cellRefs.current[focusedIdx].focus();
+        }
+      }, [focusedIdx]);
+
+      // Auto-scroll terminal logs
+      useEffect(() => {
+        if (logEndRef.current) {
+          logEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, [logs]);
+
+      const playSound = useCallback((type, freq, duration, vol = 0.05) => {
+        try {
+          if (!isMountedRef.current) return;
+          if (!audioCtxRef.current) {
+            audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+          }
+          const ctx = audioCtxRef.current;
+          if (ctx.state === 'suspended') ctx.resume();
+          
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, ctx.currentTime);
+          gain.gain.setValueAtTime(vol, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + duration);
+        } catch (e) { /* Audio fallback */ }
+      }, []);
+
+      const SFX = useMemo(() => ({
+        draw: () => playSound('sine', 800, 0.05, 0.02),
+        node: () => playSound('square', 1200, 0.15, 0.03),
+        step: () => playSound('triangle', 1800, 0.03, 0.01),
+        arrive: () => {
+          if (!isMountedRef.current) return;
+          playSound('sine', 880, 0.1, 0.03);
+          const t = setTimeout(() => {
+            if (isMountedRef.current) playSound('sine', 1760, 0.2, 0.03);
+          }, 100);
+          timeoutIdsRef.current.push(t);
+        },
+        success: () => {
+          if (!isMountedRef.current) return;
+          playSound('sine', 440, 0.1, 0.05);
+          const t1 = setTimeout(() => {
+            if (isMountedRef.current) playSound('sine', 554.37, 0.1, 0.05);
+          }, 100);
+          const t2 = setTimeout(() => {
+            if (isMountedRef.current) playSound('sine', 659.25, 0.4, 0.05);
+          }, 200);
+          timeoutIdsRef.current.push(t1, t2);
+        },
+        fail: () => {
+          if (!isMountedRef.current) return;
+          playSound('sawtooth', 150, 0.3, 0.05);
+          const t = setTimeout(() => {
+            if (isMountedRef.current) playSound('sawtooth', 100, 0.4, 0.05);
+          }, 150);
+          timeoutIdsRef.current.push(t);
+        }
+      }), [playSound]);
+
+      const addLog = useCallback((text, type = 'info') => {
+        if (!isMountedRef.current) return;
+        setLogs(prev => [...prev, { id: Date.now() + Math.random(), text, type }]);
+      }, []);
+
+      const resetLevel = useCallback(() => {
+        if (!isMountedRef.current) return;
+        setGameState('idle');
+        setPath([level.client]);
+        setFocusedIdx(level.client);
+        setPacketIdx(-1);
+        const initialState = { encrypted: false, key: null, auth: false };
+        setPacketState(initialState);
+        simPacketStateRef.current = initialState;
+        addLog(`> LOADED MODULE: ${level.title}`, 'info');
+      }, [level, addLog]);
+
+      useEffect(() => {
+        resetLevel();
+      }, [resetLevel]);
+
+      const getXY = (index) => ({ x: index % COLS, y: Math.floor(index / COLS) });
+      const getIndex = (x, y) => y * COLS + x;
+
+      const isOrthogonal = (i1, i2) => {
+        const { x: x1, y: y1 } = getXY(i1);
+        const { x: x2, y: y2 } = getXY(i2);
+        return Math.abs(x1 - x2) + Math.abs(y1 - y2) === 1;
+      };
+
+      const isHackerZone = (index) => {
+        const { x, y } = getXY(index);
+        for (let h of level.hackers) {
+          const { x: hx, y: hy } = getXY(h);
+          if (Math.abs(hx - x) <= 1 && Math.abs(hy - y) <= 1) return true;
+        }
+        return false;
+      };
+
+      const handlePointerDown = (index) => {
+        if (gameState === 'running' || gameState === 'success' || gameState === 'fail') return;
+        if (index === level.client) {
+          setGameState('drawing');
+          setPath([index]);
+          setFocusedIdx(index);
+          addLog("> TRACING NEW ROUTE...", "info");
+        }
+      };
+
+      const handlePointerEnter = useCallback((index) => {
+        if (gameState !== 'drawing') return;
+        if (level.walls?.includes(index) || level.hackers?.includes(index)) return;
+        
+        const lastTile = path[path.length - 1];
+        if (path.length > 1 && index === path[path.length - 2]) {
+          setPath(prev => prev.slice(0, -1));
+          setFocusedIdx(index);
+          return;
+        }
+
+        if (!path.includes(index) && isOrthogonal(lastTile, index)) {
+          SFX.draw();
+          setPath(prev => [...prev, index]);
+          setFocusedIdx(index);
+        }
+      }, [gameState, path, level, SFX]);
+
+      const handlePointerUp = useCallback(() => {
+        if (gameState === 'drawing') {
+          if (path[path.length - 1] === level.server) {
+            setGameState('ready');
+            addLog("> ROUTE LOCKED. READY TO TRANSMIT.", "success");
+          } else {
+            setGameState('idle');
+            addLog("> ROUTE INCOMPLETE. MUST REACH SERVER.", "warn");
+            setPath([level.client]);
+            setFocusedIdx(level.client);
+          }
+        }
+      }, [gameState, path, level.client, level.server, addLog]);
+
+      const evaluateTileEnter = useCallback((tileIdx) => {
+        const node = level.nodes.find(n => n.index === tileIdx);
+        if (node) {
+          if (node.type === 'encrypt_good') {
+            simPacketStateRef.current = { ...simPacketStateRef.current, encrypted: true, key: 'good' };
+            SFX.node();
+            addLog("> DATA ENCRYPTED [AES-256].", "success");
+          } else if (node.type === 'encrypt_bad') {
+            simPacketStateRef.current = { ...simPacketStateRef.current, encrypted: true, key: 'bad' };
+            SFX.node();
+            addLog("> WARNING: UNVERIFIED KEY APPLIED.", "warn");
+          } else if (node.type === 'auth') {
+            simPacketStateRef.current = { ...simPacketStateRef.current, auth: true };
+            SFX.node();
+            addLog("> IDENTITY VERIFIED [mTLS].", "success");
+          }
+          setPacketState({ ...simPacketStateRef.current });
+        }
+
+        if (isHackerZone(tileIdx)) {
+          if (!simPacketStateRef.current.encrypted) {
+            addLog("> FATAL: PLAINTEXT INTERCEPTED!", "error");
+            SFX.fail();
+            if (navigator.vibrate) navigator.vibrate(200);
+            return false; 
+          } else if (simPacketStateRef.current.key === 'bad') {
+            addLog("> FATAL: HACKER DECRYPTED PAYLOAD USING HONEYPOT KEY!", "error");
+            SFX.fail();
+            if (navigator.vibrate) navigator.vibrate(200);
+            return false; 
+          } else {
+            addLog("> Hacker Sniffing... Packet encrypted. Data safe.", "info");
+          }
+        }
+        return true;
+      }, [level.nodes, SFX, addLog]);
+
+      const evaluateEndCondition = useCallback(() => {
+        const finalPacket = simPacketStateRef.current;
+        if (level.requiresAuth && !finalPacket.auth) {
+          addLog("> SERVER FIREWALL DROP: UNAUTHENTICATED PACKET.", "error");
+          SFX.fail();
+          setGameState('fail');
+          return;
+        }
+        if (!finalPacket.encrypted) {
+          addLog("> SERVER DROP: UNENCRYPTED PACKET REJECTED.", "error");
+          SFX.fail();
+          setGameState('fail');
+          return;
+        }
+        addLog("> TRANSMISSION SUCCESSFUL.", "success");
+        SFX.success();
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]);
+        setGameState('success');
+      }, [level.requiresAuth, SFX, addLog]);
+
+      useEffect(() => {
+        if (gameState !== 'running') return;
+        let currentStep = 0;
+        const pathString = JSON.stringify(path);
+        const localPath = JSON.parse(pathString);
+
+        const interval = setInterval(() => {
+          if (!isMountedRef.current) {
+            clearInterval(interval);
+            return;
+          }
+          
+          currentStep++;
+          if (currentStep >= localPath.length) {
+            clearInterval(interval);
+            evaluateEndCondition();
+            return;
+          }
+
+          setPacketIdx(currentStep);
+          const currentTile = localPath[currentStep];
+          if (currentStep === localPath.length - 1) {
+            SFX.arrive();
+          } else {
+            SFX.step();
+          }
+          
+          const proceed = evaluateTileEnter(currentTile);
+          if (!proceed) {
+            clearInterval(interval);
+            setGameState('fail');
+          }
+        }, 400);
+
+        return () => clearInterval(interval);
+      }, [gameState, path, SFX, evaluateTileEnter, evaluateEndCondition]);
+
+      const executeRun = useCallback(() => {
+        simPacketStateRef.current = { encrypted: false, key: null, auth: false };
+        setPacketState({ ...simPacketStateRef.current });
+        setGameState('running');
+        setPacketIdx(0);
+        addLog("> EXECUTING PACKET TRANSMISSION...", "info");
+      }, [addLog]);
+
+      const handleKeyDown = (e) => {
+        if (gameState === 'running') return;
+
+        const { x, y } = getXY(focusedIdx);
+        let nextIdx = -1;
+
+        switch (e.key) {
+          case 'Enter':
+            e.preventDefault();
+            if (gameState === 'idle') handlePointerDown(level.client);
+            else if (gameState === 'ready') executeRun();
+            else handlePointerUp();
+            break;
+          case 'Escape':
+            e.preventDefault();
+            resetLevel();
+            break;
+          case 'ArrowUp': 
+            e.preventDefault();
+            if (y > 0) nextIdx = getIndex(x, y - 1); 
+            break;
+          case 'ArrowDown': 
+            e.preventDefault();
+            if (y < ROWS - 1) nextIdx = getIndex(x, y + 1); 
+            break;
+          case 'ArrowLeft': 
+            e.preventDefault();
+            if (x > 0) nextIdx = getIndex(x - 1, y); 
+            break;
+          case 'ArrowRight': 
+            e.preventDefault();
+            if (x < COLS - 1) nextIdx = getIndex(x + 1, y); 
+            break;
+          case ' ':
+            e.preventDefault();
+            if (gameState === 'ready') executeRun();
+            break;
+          default: return;
+        }
+
+        if (nextIdx !== -1) {
+          if (gameState === 'drawing') {
+            handlePointerEnter(nextIdx);
+          } else {
+            setFocusedIdx(nextIdx);
+          }
+        }
+      };
+
+      return (
+        <div 
+          className="min-h-screen bg-slate-800 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-700 via-slate-800 to-slate-900 text-slate-300 font-mono flex flex-col md:flex-row p-4 gap-6 outline-none transition-all"
+          role="application"
+          aria-label="Hacker Grid Game"
+        >
+          <style>
+            {`
+              @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+              .wall-pattern {
+                background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.2) 10px, rgba(0,0,0,0.2) 20px);
+              }
+              .grid-cell-focus:focus {
+                outline: 2px solid #22d3ee;
+                outline-offset: -2px;
+                z-index: 40;
+              }
+            `}
+          </style>
+          
+          {/* LEFT COLUMN: THE GRID AREA */}
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <div className="mb-6 text-center">
+              <h1 className="text-3xl font-bold text-cyan-400 tracking-wider">ROUTING PROTOCOL</h1>
+              <p className="text-slate-300 text-sm mt-1">SECURE NETWORK SIMULATOR v2.5</p>
+            </div>
+
+            <div 
+              role="grid"
+              aria-label="Network Routing Grid"
+              className="bg-slate-900 p-2 rounded-xl border border-slate-800 shadow-2xl relative select-none touch-none flex flex-col gap-1"
+              onKeyDown={handleKeyDown}
+              onPointerUp={handlePointerUp}
+              onPointerLeave={handlePointerUp}
+            >
+              {Array.from({ length: ROWS }).map((_, r) => (
+                <div key={r} role="row" className="flex gap-1">
+                  {Array.from({ length: COLS }).map((_, c) => {
+                    const idx = getIndex(c, r);
+                    const isClient = level.client === idx;
+                    const isServer = level.server === idx;
+                    const isHacker = level.hackers?.includes(idx);
+                    const node = level.nodes?.find(n => n.index === idx);
+                    const isWall = level.walls?.includes(idx);
+                    const isPath = path.includes(idx);
+                    const isHead = path[path.length - 1] === idx;
+                    const isPacketHere = gameState === 'running' && packetIdx === path.indexOf(idx) && idx !== -1;
+                    const inHackerZone = isHackerZone(idx) && !isHacker && !isWall && !isClient && !isServer;
+
+                    let bgClass = "bg-slate-700 hover:bg-slate-600";
+                    if (isWall) bgClass = "bg-slate-950 border-t-2 border-slate-800 wall-pattern";
+                    if (inHackerZone) bgClass = "bg-red-900/40";
+                    if (isHacker) bgClass = "bg-red-900 border border-red-500/50";
+                    if (isPath) bgClass = "bg-cyan-700/40 border-cyan-400/50 shadow-[inset_0_0_15px_rgba(34,211,238,0.4)]";
+                    if (isPacketHere && gameState === 'running') bgClass = "bg-cyan-400 shadow-[0_0_20px_rgba(34,211,238,1)] scale-110 z-10";
+                    if (gameState === 'fail' && isPacketHere) bgClass = "bg-red-500 shadow-[0_0_30px_rgba(239,68,68,1)] scale-110 z-10";
+                    if (idx === focusedIdx) bgClass += " ring-1 ring-white ring-inset ring-opacity-20";
+
+                    return (
+                      <div
+                        key={idx}
+                        ref={el => cellRefs.current[idx] = el}
+                        role="gridcell"
+                        aria-selected={isPath}
+                        aria-label={`${isClient ? 'Client' : isServer ? 'Server' : isHacker ? 'Hacker' : node ? node.label : 'Network Tile'} at row ${r + 1} column ${c + 1}`}
+                        tabIndex={idx === focusedIdx ? 0 : -1}
+                        onFocus={() => setFocusedIdx(idx)}
+                        onPointerDown={(e) => { e.preventDefault(); handlePointerDown(idx); }}
+                        onPointerEnter={(e) => { e.preventDefault(); handlePointerEnter(idx); }}
+                        onPointerUp={handlePointerUp}
+                        className={`w-12 h-12 md:w-16 md:h-16 rounded flex items-center justify-center transition-all relative ${isWall || isHacker ? 'cursor-not-allowed' : 'cursor-crosshair'} border border-slate-800/50 grid-cell-focus ${bgClass}`}
+                      >
+                        {isClient && <Laptop size={24} className="text-cyan-400 z-10" aria-hidden="true" />}
+                        {isServer && <Server size={24} className={`z-10 ${gameState === 'success' ? "text-green-400" : "text-slate-400"}`} aria-hidden="true" />}
+                        {isHacker && <Eye size={24} className="text-red-500 animate-pulse z-10" aria-hidden="true" />}
+                        {node && <node.icon size={20} className={`${node.color} z-10`} aria-hidden="true" />}
+                        
+                        {(node || isClient || isServer) && (
+                          <span className="absolute -bottom-5 text-[10px] whitespace-nowrap text-slate-500 font-bold opacity-0 md:opacity-100">
+                            {isClient ? 'CLIENT' : isServer ? 'SERVER' : node.label}
+                          </span>
+                        )}
+
+                        {isPath && !isHead && gameState !== 'running' && (
+                          <div className="absolute inset-0 m-auto w-2 h-2 bg-cyan-500 rounded-full" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-4 mt-8 text-xs text-slate-300 font-medium">
+              <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-950 border border-red-500/30 rounded"></div> Sniff Zone</div>
+              <div className="flex items-center gap-1"><div className="w-3 h-3 bg-slate-800 rounded"></div> Firewall (Wall)</div>
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN: TERMINAL & CONTROLS */}
+          <div className="flex-1 flex flex-col gap-4 max-w-md w-full mx-auto">
+            <div className="bg-slate-900 border-l-4 border-cyan-500 p-4 shadow-lg" role="region" aria-label="Level Objective">
+              <h2 className="text-lg font-bold text-white uppercase">{level.title}</h2>
+              <p className="text-sm text-slate-400 mt-2 leading-relaxed">{level.objective}</p>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-800 p-4 shadow-lg relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-2 opacity-10">
+                <Terminal size={64} />
+              </div>
+              <h3 className="text-xs font-bold text-slate-500 mb-3 tracking-widest border-b border-slate-800 pb-2">PACKET INSPECTOR</h3>
+              <div className="grid grid-cols-2 gap-4 text-sm relative z-10" aria-live="polite">
+                <div className="flex flex-col gap-1">
+                  <span className="text-slate-500">ENCRYPTION</span>
+                  <span className={packetState.encrypted ? "text-green-400 font-bold" : "text-red-400 font-bold"}>
+                    {packetState.encrypted ? "ACTIVE" : "PLAINTEXT"}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-slate-500">KEY TRUST</span>
+                  <span className={!packetState.key ? "text-slate-600" : packetState.key === 'good' ? "text-blue-400 font-bold" : "text-red-500 font-bold"}>
+                    {packetState.key ? packetState.key.toUpperCase() : "NONE"}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1 col-span-2">
+                  <span className="text-slate-500">AUTH TOKEN (mTLS)</span>
+                  <span className={packetState.auth ? "text-purple-400 font-bold flex items-center gap-2" : "text-slate-600 font-bold"}>
+                    {packetState.auth ? <><Shield size={14}/> VERIFIED</> : "MISSING"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div 
+              className="flex-1 min-h-[200px] bg-black border border-slate-800 p-4 font-mono text-xs overflow-y-auto flex flex-col justify-end shadow-inner relative"
+              aria-live="polite"
+            >
+              <div className="absolute top-2 left-2 flex gap-1.5" aria-hidden="true">
+                <div className="w-2.5 h-2.5 rounded-full bg-slate-700"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-slate-700"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-slate-700"></div>
+              </div>
+              <div className="mt-6 flex flex-col gap-1">
+                {logs.map((log) => (
+                  <div key={log.id} style={{ animation: 'fadeIn 0.2s ease-in-out' }} className={`
+                    ${log.type === 'error' ? 'text-red-500 font-bold' : ''}
+                    ${log.type === 'success' ? 'text-green-400' : ''}
+                    ${log.type === 'warn' ? 'text-yellow-400' : ''}
+                    ${log.type === 'info' ? 'text-cyan-600' : ''}
+                  `}>
+                    {log.text}
+                  </div>
+                ))}
+                <div ref={logEndRef} />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              {gameState === 'success' ? (
+                <button
+                  onClick={() => setLevelIdx(prev => (prev + 1) % LEVELS.length)}
+                  className="flex-1 flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-4 rounded transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500"
+                >
+                  <CheckCircle2 size={20} /> NEXT MODULE
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={resetLevel}
+                    aria-label="Reset Level"
+                    className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-4 px-6 rounded transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-slate-500"
+                  >
+                    <RotateCcw size={20} />
+                  </button>
+                  <button
+                    onClick={executeRun}
+                    disabled={gameState !== 'ready'}
+                    className="flex-1 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded transition-all disabled:opacity-30 disabled:cursor-not-allowed focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  >
+                    <Play size={20} /> EXECUTE ROUTE
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
