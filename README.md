@@ -1,31 +1,43 @@
-# Routing Protocol
+Title
+Routing Protocol – Secure Network Simulator
 
-**Historical names:** HackerGrid: Routing Protocol, Routing Protocol v3, Secure Network Simulator v3.0  
-**Status:** original educational browser puzzle game  
-**Play:** https://joenasr.itch.io/routing-protocol  
-**Creator:** Joe Nasr  
-**Creator identity:** https://joe-nasr-signals.vercel.app/v2/
+Description
+A cybersecurity puzzle game where you design network routes to deliver a data packet safely from client to server. You must avoid hacker sniffing zones, collect encryption keys, and obtain authentication tokens – all while obeying the rules of a zero‑trust network. The game simulates real‑world network security concepts in a minimalist, digi‑punk interface.
 
-Routing Protocol is a browser puzzle game about constructing a valid packet route from a client node to a destination server through a constrained grid.
+How to Play
+Draw a path – Tap/click the client tile, then drag through adjacent tiles (up, down, left, right) to reach the server.
 
-## Gameplay
+Follow the rules –
 
-Players draw a route through adjacent tiles while avoiding blocked cells and simulated threat zones. Later levels introduce game objects representing encryption keys and authentication tokens.
+You cannot cross walls or step directly on hackers.
 
-The game uses simplified networking and security concepts as puzzle mechanics. It is not a production network simulator, security certification tool, or validated cybersecurity training environment.
+Hackers have a 3×3 sniff zone; entering it without a good encryption key will expose your data and fail the mission.
 
-## Game identity
+Collect green encryption keys (good) to protect your payload.
 
-**Routing Protocol** is the public game title. HackerGrid: Routing Protocol, Routing Protocol v3, and Secure Network Simulator v3.0 are historical development labels for the same game lineage and must not be treated as separate games.
+Red keys (bad) will encrypt your data with a honeypot key – safe‑looking but the hacker can still break it.
 
-## Technology
+In later levels, you must also grab an auth token (mTLS), or the server will drop your packet.
 
-HTML, React, JavaScript, and browser based pointer or touch interaction.
+Execute – Once the path connects client to server, hit Execute Route and watch the packet travel step‑by‑step, checking each tile.
 
-## Provenance
+Learn from failure – The terminal log explains exactly why a route failed, teaching you how to improve.
 
-Routing Protocol is an original game project by Joe Nasr and is indexed in the canonical Games catalog:
+Mental & Psychological Skills Improved
+Strategic Planning & Routing – You learn to think ahead, plan multi‑step paths, and anticipate risks.
 
-https://joe-nasr-signals.vercel.app/v2/games.html
+Logical Reasoning – Understanding the order of operations (encrypt before crossing a sniff zone, authenticate before reaching the server) strengthens logical sequencing.
 
-Existing branches and historical files are retained as development history.
+Problem‑Solving under Constraints – Walls, multiple hackers, and limited paths force you to find creative solutions – like backtracking or taking longer, safer routes.
+
+Cybersecurity Intuition – You internalise key security concepts (AES‑256, mTLS, honeypots, zero‑trust architecture) in a practical, visual way.
+
+Resilience & Trial‑Error Learning – Failing is part of the game; each attempt improves your understanding and builds a growth mindset.
+
+Attention to Detail – Spotting fake keys vs. real keys trains focused observation.
+
+Working Memory – You must hold the state of your packet (encrypted? authenticated?) in mind while building the path.
+
+The game transforms abstract network security into a tangible, addictive puzzle – making you a sharper thinker in both tech and everyday logic.
+
+This response is AI-generated, for reference only.
